@@ -1,0 +1,232 @@
+{
+  "adresse": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+  "abi": [
+    {
+      "type": "constructor",
+      "stateMutability": "undefined",
+      "payable": false,
+      "inputs": [
+        {
+          "type": "address",
+          "name": "_connecteur"
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "anonymous": false,
+      "name": "AdminEnregistre",
+      "inputs": [
+        {
+          "type": "string",
+          "name": "admin",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "anonymous": false,
+      "name": "AdminReintegre",
+      "inputs": [
+        {
+          "type": "string",
+          "name": "admin",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "anonymous": false,
+      "name": "AdminRestreint",
+      "inputs": [
+        {
+          "type": "string",
+          "name": "admin",
+          "indexed": false
+        },
+        {
+          "type": "uint256",
+          "name": "score",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "anonymous": false,
+      "name": "AnomalieSignalee",
+      "inputs": [
+        {
+          "type": "string",
+          "name": "admin",
+          "indexed": false
+        },
+        {
+          "type": "string",
+          "name": "alerteId",
+          "indexed": false
+        },
+        {
+          "type": "uint256",
+          "name": "points",
+          "indexed": false
+        },
+        {
+          "type": "uint256",
+          "name": "score",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "anonymous": false,
+      "name": "RevocationDeclenchee",
+      "inputs": [
+        {
+          "type": "string",
+          "name": "admin",
+          "indexed": false
+        },
+        {
+          "type": "uint256",
+          "name": "score",
+          "indexed": false
+        },
+        {
+          "type": "uint256",
+          "name": "date",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "SEUIL_RESTREINT",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [],
+      "outputs": [
+        {
+          "type": "uint256",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "SEUIL_REVOCATION",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [],
+      "outputs": [
+        {
+          "type": "uint256",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "connecteur",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [],
+      "outputs": [
+        {
+          "type": "address",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "enregistrerAdmin",
+      "constant": false,
+      "payable": false,
+      "inputs": [
+        {
+          "type": "string",
+          "name": "admin"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "lireAdmin",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [
+        {
+          "type": "string",
+          "name": "admin"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "uint8",
+          "name": ""
+        },
+        {
+          "type": "uint256",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "proprietaire",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [],
+      "outputs": [
+        {
+          "type": "address",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "reintegrer",
+      "constant": false,
+      "payable": false,
+      "inputs": [
+        {
+          "type": "string",
+          "name": "admin"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "signalerAnomalie",
+      "constant": false,
+      "payable": false,
+      "inputs": [
+        {
+          "type": "string",
+          "name": "admin"
+        },
+        {
+          "type": "uint256",
+          "name": "points"
+        },
+        {
+          "type": "string",
+          "name": "alerteId"
+        }
+      ],
+      "outputs": []
+    }
+  ]
+}
