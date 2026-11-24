@@ -1,0 +1,5 @@
+2026-11-18T10:05:00.000000+01:00 osboxes sshd[1200]: Accepted publickey for admin1 from 127.0.0.1 port 51200 ssh2: ED25519 SHA256:abc
+2026-11-18T03:12:00.000000+01:00 osboxes sshd[1302]: Accepted publickey for admin1 from 127.0.0.1 port 51310 ssh2: ED25519 SHA256:def
+2026-11-18T03:20:41.000000+01:00 osboxes sudo:   admin1 : TTY=pts/0 ; PWD=/home/admin1 ; USER=root ; COMMAND=/usr/sbin/visudo
+2026-11-18T03:25:00.000000+01:00 osboxes sudo:   admin1 : TTY=pts/0 ; PWD=/home/admin1 ; USER=root ; COMMAND=/usr/bin/apt update
+2026-11-18T03:30:00.000000+01:00 osboxes sshd[1400]: Accepted publickey for osboxes from 127.0.0.1 port 51400 ssh2: ED25519 SHA256:ghi
