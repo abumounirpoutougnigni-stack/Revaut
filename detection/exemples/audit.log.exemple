@@ -1,0 +1,4 @@
+type=SYSCALL msg=audit(1795000000.123:456): arch=c000003e syscall=2 success=yes exit=3 a0=7f a1=0 a2=1b6 a3=0 items=1 ppid=1200 pid=1301 auid=1001 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=pts0 ses=1 comm="cat" exe="/usr/bin/cat" subj=unconfined key="fichier_secret"
+type=PATH msg=audit(1795000000.123:456): item=0 name="/etc/shadow" inode=131073 dev=08:01 mode=0100640 ouid=0 ogid=42 rdev=00:00 nametype=NORMAL cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0
+type=SYSCALL msg=audit(1795000001.000:457): arch=c000003e syscall=2 success=yes exit=3 items=1 ppid=1 pid=900 auid=4294967295 uid=0 gid=0 euid=0 comm="sshd" exe="/usr/sbin/sshd" key="fichier_secret"
+type=PATH msg=audit(1795000001.000:457): item=0 name="/etc/shadow" inode=131073 dev=08:01 mode=0100640 ouid=0 ogid=42 rdev=00:00 nametype=NORMAL
