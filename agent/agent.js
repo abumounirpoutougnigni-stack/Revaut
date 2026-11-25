@@ -17,7 +17,7 @@ const SEUIL            = parseInt(option("seuil", "100"));
 const FICHIER_REVOC    = path.join(__dirname, "revocations.jsonl");
 const SCRIPT_REVOQUER  = path.join(__dirname, "revoquer.sh");
 // Chemin vers signaler.js de J1 (blockchain) — facultatif
-const SIGNALER_JS      = path.join(__dirname, "../contrat/signaler.js");
+const SIGNALER_JS = path.join(__dirname, "../contrat/scripts/signaler.js");
 
 console.log(`[agent] Surveille : ${FICHIER_ALERTES}`);
 console.log(`[agent] Seuil de révocation : ${SEUIL} pts`);
