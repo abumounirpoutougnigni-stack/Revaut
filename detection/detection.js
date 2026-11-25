@@ -1,6 +1,6 @@
-// detection/detection.js
+// detection/detection.js  v3.1
 // Surveille auth.log et audit.log — crée des alertes JSON
-// v3.1 : compatible Ubuntu 26.04 (format auditd enrichi une-ligne)
+// Compatible Ubuntu 26.04 (format auditd enrichi une-ligne)
 
 const fs     = require("fs");
 const path   = require("path");
@@ -78,13 +78,13 @@ function analyserLigneAuth(ligne) {
   }
 }
 
-// --- Règle 2 : audit.log (format Ubuntu 26.04 enrichi une-ligne) ---
+// --- Règle 2 : audit.log (Ubuntu 26.04 — format enrichi une-ligne) ---
 function analyserLigneAudit(ligne) {
   // Doit contenir la clé fichier_secret ET shadow
   if (!ligne.includes("fichier_secret")) return;
   if (!ligne.includes("shadow")) return;
 
-  // Cherche auid= (numéro uniquement, pas nom résolu)
+  // Cherche auid= numérique (pas nom résolu)
   const mAuid = ligne.match(/\bauid=(\d+)/);
   if (!mAuid) return;
   const auid = mAuid[1];
