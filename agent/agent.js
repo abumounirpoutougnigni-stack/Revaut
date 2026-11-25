@@ -16,8 +16,9 @@ const FICHIER_ALERTES  = option("alertes", path.join(__dirname, "../detection/al
 const SEUIL            = parseInt(option("seuil", "100"));
 const FICHIER_REVOC    = path.join(__dirname, "revocations.jsonl");
 const SCRIPT_REVOQUER  = path.join(__dirname, "revoquer.sh");
-// Chemin vers signaler.js de J1 (blockchain) — facultatif
-const SIGNALER_JS = path.join(__dirname, "../contrat/scripts/signaler.js");
+// Chemin vers le connecteur blockchain J1/J4
+const CONTRAT_DIR = path.join(__dirname, "../contrat");
+const SIGNALER_JS = path.join(CONTRAT_DIR, "scripts/signaler.js");
 
 console.log(`[agent] Surveille : ${FICHIER_ALERTES}`);
 console.log(`[agent] Seuil de révocation : ${SEUIL} pts`);
@@ -89,12 +90,22 @@ function revoquer(admin, totalPts) {
   fs.appendFileSync(FICHIER_REVOC, entree + "\n");
   console.log(`[agent] Enregistré dans ${FICHIER_REVOC}`);
 
-  // 3. Signaler sur la blockchain (J1) — optionnel
+  // 3. Signaler sur la blockchain (J1/J4)
   if (fs.existsSync(SIGNALER_JS)) {
     try {
       const sortieBC = execSync(
-        `node "${SIGNALER_JS}" --admin "${admin}" --score ${totalPts}`,
-        { encoding: "utf8", stdio: "pipe", cwd: path.dirname(SIGNALER_JS) }
+        "npx hardhat run scripts/signaler.js --network localhost",
+        {
+          encoding: "utf8",
+          stdio: "pipe",
+          cwd: CONTRAT_DIR,
+          env: {
+            ...process.env,
+            ADMIN: admin,
+            POINTS: String(totalPts),
+            ID: `revocation-${admin}-${Date.now()}`
+          }
+        }
       );
       console.log(`[agent] Blockchain : ${sortieBC.trim()}`);
     } catch (err) {
