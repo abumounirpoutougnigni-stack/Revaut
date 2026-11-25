@@ -54,6 +54,54 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (req.method === 'POST' && url.pathname === '/api/demo/alert') {
+    const alertesFile = path.join(root, '../detection/alertes.jsonl');
+    const alertes = readJsonLines(alertesFile);
+    const alert = {
+      alerteId: `sudo-demo-${Date.now()}`,
+      admin: 'admin1',
+      regle: 'sudo_inhabituel',
+      points: 30,
+      heure: new Date().toISOString()
+    };
+    fs.appendFileSync(alertesFile, JSON.stringify(alert) + '\n');
+    const total = alertes.filter(item => item.admin === 'admin1').reduce((sum, item) => sum + Number(item.points || 0), 0) + 30;
+    jsonResponse(res, { alerte: alert, total });
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/demo/complete') {
+    const alertesFile = path.join(root, '../detection/alertes.jsonl');
+    const revocationsFile = path.join(root, '../agent/revocations.jsonl');
+    const existing = readJsonLines(alertesFile).filter(item => item.admin === 'admin1');
+    const existingPoints = existing.reduce((sum, item) => sum + Number(item.points || 0), 0);
+    const alertes = [];
+
+    for (let points = existingPoints; points < 120; points += 30) {
+      const alert = {
+        alerteId: `sudo-demo-${Date.now()}-${alertes.length}`,
+        admin: 'admin1',
+        regle: 'sudo_inhabituel',
+        points: 30,
+        heure: new Date().toISOString()
+      };
+      alertes.push(alert);
+      fs.appendFileSync(alertesFile, JSON.stringify(alert) + '\n');
+    }
+
+    const revocation = { admin: 'admin1', totalPts: 120, heure: new Date().toISOString(), action: 'revocation' };
+    fs.appendFileSync(revocationsFile, JSON.stringify(revocation) + '\n');
+    jsonResponse(res, { alertes, revocation });
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/demo/reset') {
+    fs.writeFileSync(path.join(root, '../detection/alertes.jsonl'), '');
+    fs.writeFileSync(path.join(root, '../agent/revocations.jsonl'), '');
+    jsonResponse(res, { reset: true });
+    return;
+  }
+
   const file = url.pathname === '/' ? path.join(root, 'index.html') : path.join(root, url.pathname.replace(/^\//, ''));
   if (!file.startsWith(root)) { res.writeHead(403); res.end('Forbidden'); return; }
   sendFile(res, file);
