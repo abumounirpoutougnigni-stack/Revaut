@@ -44,6 +44,27 @@
         <div id="revocations" class="timeline"></div>
       </article>
     </section>
+
+    <section class="panel process-panel">
+      <div class="panel-title">
+        <h2>Visualisation du processus</h2>
+        <span id="processState">En attente</span>
+      </div>
+      <div class="process-flow">
+        <article class="process-step" id="step-j2"><div class="step-number">J2</div><strong>Détection</strong><small>Analyse des journaux</small></article>
+        <div class="process-arrow">→</div>
+        <article class="process-step" id="step-j3"><div class="step-number">J3</div><strong>Agent</strong><small>Cumul des points</small></article>
+        <div class="process-arrow">→</div>
+        <article class="process-step" id="step-j4"><div class="step-number">J4</div><strong>Blockchain</strong><small>Preuve immutable</small></article>
+        <div class="process-arrow">→</div>
+        <article class="process-step" id="step-j5"><div class="step-number">J5</div><strong>Tableau</strong><small>Visualisation</small></article>
+      </div>
+      <div class="demo-actions">
+        <button type="button" id="addAlert" class="primary">Ajouter une alerte sudo</button>
+        <button type="button" id="completeDemo">Compléter jusqu'à la révocation</button>
+        <button type="button" id="resetDemo" class="danger">Réinitialiser la démonstration</button>
+      </div>
+    </section>
   </main>
   <script src="app.js"></script>
 </body>

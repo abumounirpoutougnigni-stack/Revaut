@@ -45,5 +45,45 @@ function formatHour(value) { return value ? new Date(value).toLocaleString('fr-F
 function formatDate(value) { return value ? new Date(value).toLocaleString('fr-FR') : '—'; }
 function escapeHtml(value) { const div = document.createElement('div'); div.textContent = String(value || ''); return div.innerHTML; }
 
+const processSteps = ['step-j2', 'step-j3', 'step-j4', 'step-j5'];
+
+function setProcessStage(stage) {
+  const names = { j2:'Détection J2', j3:'Cumul agent J3', j4:'Preuve blockchain J4', j5:'Tableau J5' };
+  const indexes = { j2:0, j3:1, j4:2, j5:3 };
+  const index = indexes[stage];
+  if (index === undefined) return;
+
+  document.querySelectorAll('.process-step').forEach(step => step.classList.remove('active', 'done'));
+  for (let i = 0; i < index; i++) document.getElementById(processSteps[i]).classList.add('done');
+  document.getElementById(processSteps[index]).classList.add('active');
+  document.getElementById('processState').textContent = names[stage];
+}
+
+function connectDemoButtons() {
+  document.getElementById('addAlert').addEventListener('click', async () => {
+    setProcessStage('j2');
+    await fetch('/api/demo/alert', { method:'POST' });
+    await loadDashboard();
+    setTimeout(() => setProcessStage('j3'), 500);
+  });
+
+  document.getElementById('completeDemo').addEventListener('click', async () => {
+    setProcessStage('j2');
+    await fetch('/api/demo/complete', { method:'POST' });
+    await loadDashboard();
+    setTimeout(() => setProcessStage('j3'), 500);
+    setTimeout(() => setProcessStage('j4'), 1100);
+    setTimeout(() => setProcessStage('j5'), 1700);
+  });
+
+  document.getElementById('resetDemo').addEventListener('click', async () => {
+    await fetch('/api/demo/reset', { method:'POST' });
+    document.querySelectorAll('.process-step').forEach(step => step.classList.remove('active', 'done'));
+    document.getElementById('processState').textContent = 'En attente';
+    await loadDashboard();
+  });
+}
+
 loadDashboard();
+connectDemoButtons();
 setInterval(loadDashboard, 3000);
