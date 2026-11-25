@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Revaut — Tableau de bord</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div>
+        <p class="eyebrow">PROJET GROUPE 8</p>
+        <h1>Révocation automatisée</h1>
+      </div>
+      <div class="status" id="systemStatus"><span></span> Chargement</div>
+    </header>
+
+    <section class="metrics">
+      <article><p>Alertes</p><strong id="alertCount">0</strong></article>
+      <article><p>Points cumulés</p><strong id="pointCount">0</strong></article>
+      <article><p>Révocations</p><strong id="revocationCount">0</strong></article>
+      <article><p>Contrat</p><strong class="small" id="contractAddress">—</strong></article>
+    </section>
+
+    <section class="grid">
+      <article class="panel">
+        <div class="panel-title"><h2>Administrateurs surveillés</h2><span id="adminCount">0</span></article>
+        <div id="admins" class="admin-list"></div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-title"><h2>Dernières alertes</h2><span id="updatedAt">—</span></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Heure</th><th>Admin</th><th>Règle</th><th>Points</th></tr></thead>
+            <tbody id="alertRows"></tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="panel wide">
+        <div class="panel-title"><h2>Historique des révocations</h2></div>
+        <div id="revocations" class="timeline"></div>
+      </article>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
