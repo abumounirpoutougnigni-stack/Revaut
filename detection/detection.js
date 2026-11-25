@@ -78,34 +78,71 @@ function analyserLigneAuth(ligne) {
   }
 }
 
-// --- Règle 2 : audit.log (Ubuntu 26.04 — format enrichi une-ligne) ---
+// --- Règle 2 : audit.log ---
+const cacheAudit = new Map();
+
+// Programmes suspects sur /etc/shadow
+const PROGRAMMES_SUSPECTS = ["cat","less","more","cp","strings","grep","python3","python","perl"];
+
 function analyserLigneAudit(ligne) {
-  // Doit contenir la clé fichier_secret ET shadow
-  if (!ligne.includes("fichier_secret")) return;
-  if (!ligne.includes("shadow")) return;
+  if (!ligne.includes("fichier_secret") && !ligne.includes("shadow")) return;
 
-  // Cherche auid= numérique (pas nom résolu)
-  const mAuid = ligne.match(/\bauid=(\d+)/);
-  if (!mAuid) return;
-  const auid = mAuid[1];
+  // Format Ubuntu 26.04 enrichi : SYSCALL + PATH peuvent être sur une seule ligne.
+  if (ligne.includes("fichier_secret") && ligne.includes("shadow")) {
+    const mAuid = ligne.match(/\bauid=(\d+)/);
+    if (!mAuid) return;
+    traiterAudit(mAuid[1], ligne);
+    return;
+  }
 
-  // Exclure système (4294967295) et root (0)
+  // Format historique : événements SYSCALL puis PATH avec le même msg=audit(...).
+  const mMsg = ligne.match(/msg=audit\(([^)]+)\)/);
+  if (!mMsg) return;
+  const msgId = mMsg[1];
+
+  const mSys = ligne.match(/type=SYSCALL.*msg=audit\(([^)]+)\).*\bauid=(\d+).*comm="([^"]+)"/);
+  if (mSys) {
+    const [, id, auid, prog] = mSys;
+    if (ligne.includes("fichier_secret") || ligne.includes("key=\"fichier_secret\"")) {
+      cacheAudit.set(id, { auid, prog });
+    }
+    return;
+  }
+
+  const mPath = ligne.match(/type=PATH.*msg=audit\(([^)]+)\).*name="([^"]*shadow[^"]*)"/);
+  if (!mPath) return;
+
+  const [, id] = mPath;
+  const entree = cacheAudit.get(id);
+  if (!entree) return;
+
+  const { auid, prog } = entree;
+  if (!PROGRAMMES_SUSPECTS.includes(prog)) {
+    cacheAudit.delete(id);
+    return;
+  }
+
+  traiterAudit(auid, ligne, msgId);
+  cacheAudit.delete(id);
+}
+
+function traiterAudit(auid, ligne, msgId) {
   if (auid === "4294967295" || auid === "0") return;
 
-  // Résoudre l'uid en nom d'utilisateur
   let adminNom = null;
   try {
     for (const l of fs.readFileSync("/etc/passwd", "utf8").split("\n")) {
       const p = l.split(":");
       if (p[2] === auid) { adminNom = p[0]; break; }
     }
-  } catch (_) { adminNom = "uid" + auid; }
+  } catch (_) {
+    adminNom = null;
+  }
 
   if (!adminNom || !ADMINS.includes(adminNom)) return;
 
-  // ID stable basé sur le timestamp auditd
   const mTime = ligne.match(/msg=audit\(([^)]+)\)/);
-  const ts = mTime ? mTime[1].replace(":", "-") : Date.now().toString();
+  const ts = mTime ? mTime[1].replace(":", "-") : (msgId || Date.now().toString());
   const id = `audit-${ts}`;
 
   emettreAlerte(creerAlerte(adminNom, "fichier_secret", id));
