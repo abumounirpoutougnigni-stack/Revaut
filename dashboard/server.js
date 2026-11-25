@@ -1,7 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { spawn, execFile } = require('child_process');
+const { spawn, execFile, execFileSync } = require('child_process');
 
 const PORT = Number(process.env.PORT || 3000);
 const root = __dirname;
@@ -36,6 +36,7 @@ function sendFile(res, filePath) {
 
 const projectRoot = path.join(root, '..');
 const processes = {};
+const monitoredAdmins = new Set(['admin1']);
 const terminalLogs = {
   setup: [], j2: [], j3: [], j4: [], j5: []
 };
@@ -133,7 +134,7 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/action/j2/start') {
-    startProcess('j2', 'node', ['detection/detection.js', '--admins', 'admin1'], projectRoot);
+    startProcess('j2', 'node', ['detection/detection.js', '--admins', [...monitoredAdmins].join(',')], projectRoot);
     jsonResponse(res, { ok:true });
     return;
   }
@@ -190,6 +191,76 @@ const server = http.createServer((req, res) => {
 
   if (req.method === 'POST' && url.pathname === '/api/action/j5/start') {
     jsonResponse(res, { ok:true });
+    return;
+  }
+
+  if (url.pathname === '/api/admins') {
+    let names = [];
+    try {
+      names = fs.readFileSync('/etc/passwd', 'utf8').split('\n').map(line => line.split(':')).filter(p => p[2] >= '1000' && p[2] !== '65534').map(p => p[0]).filter(name => name !== 'nobody');
+    } catch (_) {}
+    names = names.filter(name => name.startsWith('admin'));
+    const locked = [];
+    for (const name of names) {
+      try {
+        const status = execFileSync('passwd', ['-S', name], { encoding:'utf8' });
+        if (/^\S+\s+L\b/.test(status)) locked.push(name);
+      } catch (_) {}
+    }
+    jsonResponse(res, { admins:names, locked });
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/create') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      let names = [];
+      try { names = JSON.parse(body).names || []; } catch (_) {}
+      for (const name of names) {
+        const safe = /^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/.test(name);
+        if (!safe) { logTerminal('setup', `[refus] Nom invalide: ${name}`); continue; }
+        await runCommand('setup', 'bash', ['-lc', `if ! id ${name} >/dev/null 2>&1; then sudo useradd -m -s /bin/bash ${name}; fi; sudo passwd -u ${name} 2>/dev/null || true`]);
+        monitoredAdmins.add(name);
+      }
+      jsonResponse(res, { ok:true });
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/unlock') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      let admin = '';
+      try { admin = JSON.parse(body).admin || 'admin1'; } catch (_) {}
+      runCommand('setup', 'sudo', ['passwd', '-u', admin]).then(() => runCommand('setup', 'sudo', ['passwd', '-S', admin])).then(() => jsonResponse(res, { ok:true }));
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/action') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      let payload = {};
+      try { payload = JSON.parse(body); } catch (_) {}
+      const admin = /^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/.test(payload.admin || '') ? payload.admin : 'admin1';
+
+      if (payload.rule === 'sudo') {
+        await runCommand('j2', 'runuser', ['-u', admin, '--', 'sudo', '-n', 'visudo', '-c'], { ignoreError:true });
+      } else if (payload.rule === 'shadow') {
+        await runCommand('j2', 'sudo', ['cat', '/etc/shadow'], { ignoreError:true });
+      } else if (payload.rule === 'heure') {
+        await runCommand('j2', 'bash', ['-lc', `logger -t sshd "Accepted publickey for ${admin} from 127.0.0.1 port 50000 ssh2"`], { ignoreError:true });
+      }
+      jsonResponse(res, { ok:true });
+    });
+    return;
+  }
+
+  if (url.pathname === '/console') {
+    sendFile(res, path.join(root, 'console.html'));
     return;
   }
 
