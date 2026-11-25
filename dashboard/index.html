@@ -47,22 +47,40 @@
 
     <section class="panel process-panel">
       <div class="panel-title">
-        <h2>Visualisation du processus</h2>
-        <span id="processState">En attente</span>
+        <h2>Centre de démonstration interactive</h2>
+        <span>Sorties réelles des composants</span>
       </div>
-      <div class="process-flow">
-        <article class="process-step" id="step-j2"><div class="step-number">J2</div><strong>Détection</strong><small>Analyse des journaux</small></article>
-        <div class="process-arrow">→</div>
-        <article class="process-step" id="step-j3"><div class="step-number">J3</div><strong>Agent</strong><small>Cumul des points</small></article>
-        <div class="process-arrow">→</div>
-        <article class="process-step" id="step-j4"><div class="step-number">J4</div><strong>Blockchain</strong><small>Preuve immutable</small></article>
-        <div class="process-arrow">→</div>
-        <article class="process-step" id="step-j5"><div class="step-number">J5</div><strong>Tableau</strong><small>Visualisation</small></article>
+
+      <div class="demo-toolbar">
+        <button type="button" id="createAdmin">Créer admin1</button>
+        <button type="button" id="unlockAdmin">Déverrouiller admin1</button>
+        <button type="button" id="resetDemo" class="danger">Réinitialiser J2 à J5</button>
       </div>
-      <div class="demo-actions">
-        <button type="button" id="addAlert" class="primary">Ajouter une alerte sudo</button>
-        <button type="button" id="completeDemo">Compléter jusqu'à la révocation</button>
-        <button type="button" id="resetDemo" class="danger">Réinitialiser la démonstration</button>
+
+      <div class="terminal-grid">
+        <article class="terminal-card">
+          <header><div><span class="terminal-dot red"></span><span class="terminal-dot amber"></span><span class="terminal-dot green"></span></div><strong>Terminal J2 — Détection</strong></header>
+          <div class="terminal-actions"><button data-action="j2/start">Démarrer J2</button><button data-action="j2/sudo">Exécuter sudo</button><button data-action="j2/ssh">Tester SSH</button><button data-action="j2/shadow">Lire /etc/shadow</button><button data-action="j2/stop">Arrêter</button></div>
+          <pre id="log-j2"></pre>
+        </article>
+
+        <article class="terminal-card">
+          <header><div><span class="terminal-dot red"></span><span class="terminal-dot amber"></span><span class="terminal-dot green"></span></div><strong>Terminal J3 — Agent</strong></header>
+          <div class="terminal-actions"><button data-action="j3/start">Démarrer l'agent</button><button data-action="j3/stop">Arrêter</button></div>
+          <pre id="log-j3"></pre>
+        </article>
+
+        <article class="terminal-card">
+          <header><div><span class="terminal-dot red"></span><span class="terminal-dot amber"></span><span class="terminal-dot green"></span></div><strong>Terminal J4 — Blockchain</strong></header>
+          <div class="terminal-actions"><button data-action="j4/node">Démarrer Hardhat</button><button data-action="j4/deploy">Déployer</button><button data-action="j4/status">Lire admin1</button></div>
+          <pre id="log-j4"></pre>
+        </article>
+
+        <article class="terminal-card">
+          <header><div><span class="terminal-dot red"></span><span class="terminal-dot amber"></span><span class="terminal-dot green"></span></div><strong>Terminal J5 — Tableau</strong></header>
+          <div class="terminal-actions"><button data-action="j5/start">Actualiser</button></div>
+          <pre id="log-j5">Tableau de bord actif. Les données sont mises à jour toutes les 3 secondes.</pre>
+        </article>
       </div>
     </section>
   </main>

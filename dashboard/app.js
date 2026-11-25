@@ -59,31 +59,33 @@ function setProcessStage(stage) {
   document.getElementById('processState').textContent = names[stage];
 }
 
-function connectDemoButtons() {
-  document.getElementById('addAlert').addEventListener('click', async () => {
-    setProcessStage('j2');
-    await fetch('/api/demo/alert', { method:'POST' });
-    await loadDashboard();
-    setTimeout(() => setProcessStage('j3'), 500);
-  });
+async function refreshTerminalLogs() {
+  try {
+    const response = await fetch('/api/terminals');
+    if (!response.ok) return;
+    const data = await response.json();
+    for (const name of ['j2','j3','j4','j5']) {
+      const element = document.getElementById(`log-${name}`);
+      if (!element) continue;
+      element.textContent = (data.logs[name] || []).join('\n') || 'Aucune sortie.';
+      element.scrollTop = element.scrollHeight;
+    }
+  } catch (_) {}
+}
 
-  document.getElementById('completeDemo').addEventListener('click', async () => {
-    setProcessStage('j2');
-    await fetch('/api/demo/complete', { method:'POST' });
-    await loadDashboard();
-    setTimeout(() => setProcessStage('j3'), 500);
-    setTimeout(() => setProcessStage('j4'), 1100);
-    setTimeout(() => setProcessStage('j5'), 1700);
-  });
+function connectTerminalButtons() {
+  document.getElementById('createAdmin').addEventListener('click', () => fetch('/api/demo/create-admin', { method:'POST' }));
+  document.getElementById('unlockAdmin').addEventListener('click', () => fetch('/api/demo/unlock', { method:'POST' }));
+  document.getElementById('resetDemo').addEventListener('click', () => fetch('/api/demo/reset', { method:'POST' }));
 
-  document.getElementById('resetDemo').addEventListener('click', async () => {
-    await fetch('/api/demo/reset', { method:'POST' });
-    document.querySelectorAll('.process-step').forEach(step => step.classList.remove('active', 'done'));
-    document.getElementById('processState').textContent = 'En attente';
-    await loadDashboard();
+  document.querySelectorAll('[data-action]').forEach(button => {
+    button.addEventListener('click', () => {
+      fetch(`/api/action/${button.dataset.action}`, { method:'POST' });
+    });
   });
 }
 
 loadDashboard();
-connectDemoButtons();
+connectTerminalButtons();
 setInterval(loadDashboard, 3000);
+setInterval(refreshTerminalLogs, 800);

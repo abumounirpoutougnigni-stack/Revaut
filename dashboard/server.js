@@ -1,6 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { spawn, execFile } = require('child_process');
 
 const PORT = Number(process.env.PORT || 3000);
 const root = __dirname;
@@ -33,6 +34,48 @@ function sendFile(res, filePath) {
   });
 }
 
+const projectRoot = path.join(root, '..');
+const processes = {};
+const terminalLogs = {
+  setup: [], j2: [], j3: [], j4: [], j5: []
+};
+
+function logTerminal(name, text) {
+  const clean = String(text).replace(/\r/g, '');
+  const lines = clean.split('\n').filter(Boolean);
+  terminalLogs[name].push(...lines);
+  if (terminalLogs[name].length > 300) terminalLogs[name] = terminalLogs[name].slice(-300);
+}
+
+function runCommand(name, command, args = [], options = {}) {
+  return new Promise(resolve => {
+    logTerminal(name, `$ ${command} ${args.join(' ')}`);
+    execFile(command, args, { cwd: options.cwd || projectRoot, timeout: options.timeout || 120000 }, (error, stdout, stderr) => {
+      if (stdout) logTerminal(name, stdout.trim());
+      if (stderr) logTerminal(name, stderr.trim());
+      if (error && !options.ignoreError) logTerminal(name, `[erreur] ${error.message}`);
+      resolve({ ok: !error, error: error ? error.message : null });
+    });
+  });
+}
+
+function startProcess(name, command, args, cwd, label) {
+  if (processes[name]) logTerminal(name, '[info] Processus déjà actif');
+  if (processes[name]) return;
+  logTerminal(name, `$ ${label || `${command} ${args.join(' ')}`}`);
+  const child = spawn(command, args, { cwd, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
+  processes[name] = child;
+  child.stdout.on('data', chunk => logTerminal(name, chunk.toString()));
+  child.stderr.on('data', chunk => logTerminal(name, chunk.toString()));
+  child.on('exit', code => { logTerminal(name, `[processus arrêté, code ${code}]`); delete processes[name]; });
+}
+
+function stopProcess(name) {
+  if (!processes[name]) { logTerminal(name, '[info] Aucun processus actif'); return; }
+  processes[name].kill('SIGTERM');
+  delete processes[name];
+}
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
 
@@ -49,56 +92,104 @@ const server = http.createServer((req, res) => {
       alertes,
       revocations,
       administrateurs,
-      contrat: readContractConfig()
+      contrat: readContractConfig(),
+      terminalLogs
     });
     return;
   }
 
-  if (req.method === 'POST' && url.pathname === '/api/demo/alert') {
-    const alertesFile = path.join(root, '../detection/alertes.jsonl');
-    const alertes = readJsonLines(alertesFile);
-    const alert = {
-      alerteId: `sudo-demo-${Date.now()}`,
-      admin: 'admin1',
-      regle: 'sudo_inhabituel',
-      points: 30,
-      heure: new Date().toISOString()
-    };
-    fs.appendFileSync(alertesFile, JSON.stringify(alert) + '\n');
-    const total = alertes.filter(item => item.admin === 'admin1').reduce((sum, item) => sum + Number(item.points || 0), 0) + 30;
-    jsonResponse(res, { alerte: alert, total });
-    return;
-  }
-
-  if (req.method === 'POST' && url.pathname === '/api/demo/complete') {
-    const alertesFile = path.join(root, '../detection/alertes.jsonl');
-    const revocationsFile = path.join(root, '../agent/revocations.jsonl');
-    const existing = readJsonLines(alertesFile).filter(item => item.admin === 'admin1');
-    const existingPoints = existing.reduce((sum, item) => sum + Number(item.points || 0), 0);
-    const alertes = [];
-
-    for (let points = existingPoints; points < 120; points += 30) {
-      const alert = {
-        alerteId: `sudo-demo-${Date.now()}-${alertes.length}`,
-        admin: 'admin1',
-        regle: 'sudo_inhabituel',
-        points: 30,
-        heure: new Date().toISOString()
-      };
-      alertes.push(alert);
-      fs.appendFileSync(alertesFile, JSON.stringify(alert) + '\n');
-    }
-
-    const revocation = { admin: 'admin1', totalPts: 120, heure: new Date().toISOString(), action: 'revocation' };
-    fs.appendFileSync(revocationsFile, JSON.stringify(revocation) + '\n');
-    jsonResponse(res, { alertes, revocation });
-    return;
-  }
-
   if (req.method === 'POST' && url.pathname === '/api/demo/reset') {
-    fs.writeFileSync(path.join(root, '../detection/alertes.jsonl'), '');
-    fs.writeFileSync(path.join(root, '../agent/revocations.jsonl'), '');
-    jsonResponse(res, { reset: true });
+    fs.writeFileSync(path.join(projectRoot, 'detection/alertes.jsonl'), '');
+    fs.writeFileSync(path.join(projectRoot, 'agent/revocations.jsonl'), '');
+    runCommand('setup', 'sudo', ['-n', 'passwd', '-u', 'admin1'], { ignoreError:true });
+    Object.keys(terminalLogs).forEach(name => terminalLogs[name] = []);
+    jsonResponse(res, { ok:true });
+    return;
+  }
+
+  if (url.pathname === '/api/terminals') {
+    jsonResponse(res, {
+      logs: terminalLogs,
+      processes: Object.fromEntries(Object.keys(processes).map(name => [name, true]))
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/demo/create-admin') {
+    (async () => {
+      const exists = await runCommand('setup', 'id', ['admin1'], { ignoreError:true });
+      if (!exists.ok) await runCommand('setup', 'sudo', ['-n', 'useradd', '-m', '-s', '/bin/bash', 'admin1']);
+      await runCommand('setup', 'sudo', ['-n', 'passwd', '-u', 'admin1'], { ignoreError:true });
+      await runCommand('setup', 'id', ['admin1']);
+      jsonResponse(res, { ok:true });
+    })();
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/demo/unlock') {
+    runCommand('setup', 'sudo', ['-n', 'passwd', '-u', 'admin1']).then(() => runCommand('setup', 'sudo', ['-n', 'passwd', '-S', 'admin1']));
+    setTimeout(() => jsonResponse(res, { ok:true }), 150);
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/action/j2/start') {
+    startProcess('j2', 'node', ['detection/detection.js', '--admins', 'admin1'], projectRoot);
+    jsonResponse(res, { ok:true });
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/action/j2/stop') {
+    stopProcess('j2'); jsonResponse(res, { ok:true }); return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/action/j3/start') {
+    startProcess('j3', 'sudo', ['-n', 'node', 'agent/agent.js'], projectRoot);
+    jsonResponse(res, { ok:true });
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/action/j3/stop') {
+    stopProcess('j3'); jsonResponse(res, { ok:true }); return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/action/j2/sudo') {
+    runCommand('j2', 'sudo', ['-n', 'visudo', '-c']);
+    setTimeout(() => jsonResponse(res, { ok:true }), 100);
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/action/j2/ssh') {
+    runCommand('j2', 'ssh', ['-o', 'StrictHostKeyChecking=no', '-o', 'BatchMode=yes', 'admin1@127.0.0.1', 'true'], { timeout:10000, ignoreError:true });
+    setTimeout(() => jsonResponse(res, { ok:true }), 100);
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/action/j2/shadow') {
+    runCommand('j2', 'sudo', ['-n', 'cat', '/etc/shadow'], { ignoreError:true });
+    setTimeout(() => jsonResponse(res, { ok:true }), 100);
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/action/j4/node') {
+    startProcess('j4', 'npx', ['hardhat', 'node'], path.join(projectRoot, 'contrat'));
+    jsonResponse(res, { ok:true });
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/action/j4/deploy') {
+    runCommand('j4', 'npx', ['hardhat', 'run', 'scripts/deploy.js', '--network', 'localhost'], { cwd:path.join(projectRoot, 'contrat') }).then(() => jsonResponse(res, { ok:true }));
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/action/j4/status') {
+    runCommand('j4', 'npx', ['hardhat', 'run', 'scripts/status-admin.js', '--network', 'localhost'], {
+      cwd:path.join(projectRoot, 'contrat')
+    }).then(() => jsonResponse(res, { ok:true }));
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/action/j5/start') {
+    jsonResponse(res, { ok:true });
     return;
   }
 
