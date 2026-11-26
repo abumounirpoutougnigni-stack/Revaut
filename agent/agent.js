@@ -27,6 +27,7 @@ console.log(`[agent] Seuil de révocation : ${SEUIL} pts`);
 const scores    = {};   // { admin: nombre_de_points }
 const revoques  = new Set(); // admins déjà révoqués (évite la répétition)
 const alertesLues = new Set(); // alerteId déjà traités
+const alertesRecents = new Map(); // admin:regle -> timestamp, évite les doublons J2 + bridge démo
 
 // --- Lire les alertes ---
 let position = 0;
@@ -54,9 +55,19 @@ function lireAlertes() {
     if (alertesLues.has(alerteId)) continue;
     alertesLues.add(alerteId);
 
+    // Ignorer les alertes dupliquées dans une fenêtre de 5 secondes
+    const cleRegle = `${admin}:${regle}`;
+    const derniere = alertesRecents.get(cleRegle) || 0;
+    const maintenant = Date.now();
+    if (maintenant - derniere < 5000) continue;
+    alertesRecents.set(cleRegle, maintenant);
+
     // Cumuler les points
     scores[admin] = (scores[admin] || 0) + points;
     console.log(`[agent] +${points} pts (${regle}) → ${admin} = ${scores[admin]} pts`);
+
+    // Envoyer chaque alerte à la blockchain, pas uniquement le seuil final
+    signalerAlerte(admin, points, alerteId);
 
     // Vérifier le seuil
     if (scores[admin] >= SEUIL && !revoques.has(admin)) {
@@ -90,30 +101,33 @@ function revoquer(admin, totalPts) {
   fs.appendFileSync(FICHIER_REVOC, entree + "\n");
   console.log(`[agent] Enregistré dans ${FICHIER_REVOC}`);
 
-  // 3. Signaler sur la blockchain (J1/J4)
-  if (fs.existsSync(SIGNALER_JS)) {
-    try {
-      const sortieBC = execSync(
-        "npx hardhat run scripts/signaler.js --network localhost",
-        {
-          encoding: "utf8",
-          stdio: "pipe",
-          cwd: CONTRAT_DIR,
-          env: {
-            ...process.env,
-            ADMIN: admin,
-            POINTS: String(totalPts),
-            ID: `revocation-${admin}-${Date.now()}`
-          }
-        }
-      );
-      console.log(`[agent] Blockchain : ${sortieBC.trim()}`);
-    } catch (err) {
-      console.warn(`[agent] Blockchain non disponible : ${err.message.split("\n")[0]}`);
-    }
-  }
+  // 3. La blockchain est mise à jour une transaction par alerte ci-dessus.
 
   console.log(`[agent] ✅ Révocation de ${admin} terminée.\n`);
+}
+
+// --- Envoyer une alerte à la blockchain ---
+function signalerAlerte(admin, points, alerteId) {
+  if (!fs.existsSync(SIGNALER_JS)) return;
+  try {
+    const sortie = execSync(
+      "npx hardhat run scripts/signaler.js --network localhost",
+      {
+        encoding: "utf8",
+        stdio: "pipe",
+        cwd: CONTRAT_DIR,
+        env: {
+          ...process.env,
+          ADMIN: admin,
+          POINTS: String(points),
+          ID: alerteId
+        }
+      }
+    );
+    console.log(`[agent] Blockchain : ${sortie.trim().split('\n').pop()}`);
+  } catch (err) {
+    console.warn(`[agent] Blockchain non disponible : ${err.message.split("\n")[0]}`);
+  }
 }
 
 // --- Boucle principale ---

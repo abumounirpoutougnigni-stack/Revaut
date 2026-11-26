@@ -2,6 +2,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { spawn, execFile, execFileSync } = require('child_process');
+const crypto = require('crypto');
 
 const PORT = Number(process.env.PORT || 3000);
 const root = __dirname;
@@ -177,23 +178,9 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if (req.method === 'POST' && url.pathname === '/api/action/j4/deploy') {
-    runCommand('j4', 'npx', ['hardhat', 'run', 'scripts/deploy.js', '--network', 'localhost'], { cwd:path.join(projectRoot, 'contrat') }).then(() => jsonResponse(res, { ok:true }));
-    return;
-  }
-
-  if (req.method === 'POST' && url.pathname === '/api/action/j4/status') {
-    let body = '';
-    req.on('data', chunk => body += chunk);
-    req.on('end', () => {
-      let payload = {};
-      try { payload = JSON.parse(body); } catch (_) {}
-      const admin = /^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/.test(payload.admin || '') ? payload.admin : 'admin1';
-      runCommand('j4', 'npx', ['hardhat', 'run', 'scripts/status-admin.js', '--network', 'localhost'], {
-        cwd:path.join(projectRoot, 'contrat'),
-        env:{...process.env, ADMIN:admin}
-      }).then(() => jsonResponse(res, { ok:true }));
-    });
+  if (req.method === 'POST' && url.pathname === '/api/action/j4/stop') {
+    stopProcess('j4');
+    jsonResponse(res, { ok:true });
     return;
   }
 
@@ -248,10 +235,17 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/admin/unlock') {
     let body = '';
     req.on('data', chunk => body += chunk);
-    req.on('end', () => {
-      let admin = '';
-      try { admin = JSON.parse(body).admin || 'admin1'; } catch (_) {}
-      runCommand('setup', 'sudo', ['passwd', '-u', admin]).then(() => runCommand('setup', 'sudo', ['passwd', '-S', admin])).then(() => jsonResponse(res, { ok:true }));
+    req.on('end', async () => {
+      let payload = {};
+      try { payload = JSON.parse(body); } catch (_) {}
+      const admin = /^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/.test(payload.admin || '') ? payload.admin : 'admin1';
+      await runCommand('setup', 'sudo', ['passwd', '-u', admin]);
+      await runCommand('setup', 'sudo', ['passwd', '-S', admin]);
+      await runCommand('j4', 'npx', ['hardhat', 'run', 'scripts/reintegrer-admin.js', '--network', 'localhost'], {
+        cwd:path.join(projectRoot, 'contrat'), env:{...process.env, ADMIN:admin}
+      }).catch(() => {});
+      stopProcess('j3');
+      jsonResponse(res, { ok:true });
     });
     return;
   }
@@ -286,14 +280,37 @@ const server = http.createServer((req, res) => {
       const command = String(payload.command || '').trim();
       logTerminal('j2', `[session ${admin}] $ ${command}`);
 
+      let execution = { ok:true };
+
       if (command === 'sudo visudo') {
-        await runCommand('j2', 'runuser', ['-u', admin, '--', 'sudo', '-n', 'visudo', '-c'], { ignoreError:true });
+        execution = await runCommand('j2', 'runuser', ['-u', admin, '--', 'sudo', '-n', 'visudo', '-c'], { ignoreError:true });
       } else if (command === 'sudo cat /etc/shadow') {
-        await runCommand('j2', 'runuser', ['-u', admin, '--', 'sudo', '-n', 'cat', '/etc/shadow'], { ignoreError:true });
+        execution = await runCommand('j2', 'runuser', ['-u', admin, '--', 'sudo', '-n', 'cat', '/etc/shadow'], { ignoreError:true });
       } else if (command.startsWith('ssh ')) {
-        await runCommand('j2', 'bash', ['-lc', `runuser -u ${admin} -- ssh -i /home/${admin}/.ssh/revaut_demo -o BatchMode=yes -o StrictHostKeyChecking=no -p 22 ${admin}@127.0.0.1 true`], { timeout:15000, ignoreError:true });
+        execution = await runCommand('j2', 'bash', ['-lc', `runuser -u ${admin} -- ssh -i /home/${admin}/.ssh/revaut_demo -o BatchMode=yes -o StrictHostKeyChecking=no -p 22 ${admin}@127.0.0.1 true`], { timeout:15000, ignoreError:true });
       } else {
+        execution = { ok:false };
         logTerminal('j2', '[sécurité] Commande non autorisée dans la démonstration');
+      }
+
+      let alerte = null;
+      if (command === 'sudo visudo') {
+        alerte = { alerteId:`sudo-demo-${crypto.randomBytes(6).toString('hex')}`, admin, regle:'sudo_inhabituel', points:30, heure:new Date().toISOString() };
+      } else if (command === 'sudo cat /etc/shadow') {
+        alerte = { alerteId:`shadow-demo-${crypto.randomBytes(6).toString('hex')}`, admin, regle:'fichier_secret', points:50, heure:new Date().toISOString() };
+      } else if (command.startsWith('ssh ')) {
+        alerte = { alerteId:`ssh-demo-${crypto.randomBytes(6).toString('hex')}`, admin, regle:'heure_inhabituelle', points:20, heure:new Date().toISOString() };
+      }
+
+      if (alerte && execution.ok) {
+        fs.appendFileSync(path.join(projectRoot, 'detection/alertes.jsonl'), JSON.stringify(alerte) + '\n');
+        logTerminal('j2', JSON.stringify(alerte));
+        logTerminal('j2', `[J2] Alerte envoyée à l'agent J3 : ${alerte.points} points`);
+        setTimeout(() => {
+          runCommand('j4', 'npx', ['hardhat', 'run', 'scripts/status-admin.js', '--network', 'localhost'], {
+            cwd:path.join(projectRoot, 'contrat'), env:{...process.env, ADMIN:admin}
+          });
+        }, 3200);
       }
       jsonResponse(res, { ok:true });
     });
