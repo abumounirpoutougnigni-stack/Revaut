@@ -55,6 +55,7 @@ async function refreshLogs(){
 
 async function executeCommand(command){
   const admin=document.getElementById('activeAdmin').value;
+  if(command.startsWith('ssh ')) command=`ssh ${admin}@127.0.0.1`;
   const output=document.getElementById('adminOutput');
   output.textContent+=`\n$ ${command}`;
   await api('/api/admin/command','POST',{admin,command});
