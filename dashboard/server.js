@@ -292,12 +292,12 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if (url.pathname === '/console') {
+  if (url.pathname === '/console' || url.pathname === '/') {
     sendFile(res, path.join(root, 'console.html'));
     return;
   }
 
-  const file = url.pathname === '/' ? path.join(root, 'index.html') : path.join(root, url.pathname.replace(/^\//, ''));
+  const file = path.join(root, url.pathname.replace(/^\//, ''));
   if (!file.startsWith(root)) { res.writeHead(403); res.end('Forbidden'); return; }
   sendFile(res, file);
 });
