@@ -220,8 +220,17 @@ const server = http.createServer((req, res) => {
       for (const name of names) {
         const safe = /^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/.test(name);
         if (!safe) { logTerminal('setup', `[refus] Nom invalide: ${name}`); continue; }
-        await runCommand('setup', 'bash', ['-lc', `if ! id ${name} >/dev/null 2>&1; then sudo useradd -m -s /bin/bash ${name}; fi; sudo passwd -u ${name} 2>/dev/null || true`]);
+        await runCommand('setup', 'bash', ['-lc', `if ! id ${name} >/dev/null 2>&1; then sudo useradd -m -s /bin/bash ${name}; fi; echo '${name}:Admin2026!' | sudo chpasswd; sudo passwd -u ${name} >/dev/null 2>&1 || true`]);
+        await runCommand('setup', 'bash', ['-lc', `sudo install -d -m 0700 -o ${name} -g ${name} /home/${name}/.ssh; if [ ! -f /home/${name}/.ssh/revaut_demo ]; then sudo -u ${name} ssh-keygen -t ed25519 -N '' -f /home/${name}/.ssh/revaut_demo >/dev/null 2>&1; fi; sudo cp /home/${name}/.ssh/revaut_demo.pub /home/${name}/.ssh/authorized_keys; sudo chown ${name}:${name} /home/${name}/.ssh/authorized_keys; sudo chmod 0600 /home/${name}/.ssh/authorized_keys`]);
+        fs.appendFileSync('/tmp/revaut-sudoers-part', `${name} ALL=(ALL) NOPASSWD: /usr/bin/visudo, /usr/bin/cat\n`);
         monitoredAdmins.add(name);
+        logTerminal('setup', `[créé] ${name} — mot de passe de démonstration: Admin2026!`);
+      }
+      if (names.length) {
+        fs.writeFileSync('/tmp/revaut-sudoers', `osboxes ALL=(ALL) NOPASSWD: ALL\n${fs.readFileSync('/tmp/revaut-sudoers-part', 'utf8')}`);
+        await runCommand('setup', 'sudo', ['cp', '/tmp/revaut-sudoers', '/etc/sudoers.d/revaut-demo']);
+        await runCommand('setup', 'sudo', ['chmod', '0440', '/etc/sudoers.d/revaut-demo']);
+        await runCommand('setup', 'sudo', ['visudo', '-c']);
       }
       jsonResponse(res, { ok:true });
     });
@@ -253,6 +262,30 @@ const server = http.createServer((req, res) => {
         await runCommand('j2', 'sudo', ['cat', '/etc/shadow'], { ignoreError:true });
       } else if (payload.rule === 'heure') {
         await runCommand('j2', 'bash', ['-lc', `logger -t sshd "Accepted publickey for ${admin} from 127.0.0.1 port 50000 ssh2"`], { ignoreError:true });
+      }
+      jsonResponse(res, { ok:true });
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/command') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      let payload = {};
+      try { payload = JSON.parse(body); } catch (_) {}
+      const admin = /^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/.test(payload.admin || '') ? payload.admin : 'admin1';
+      const command = String(payload.command || '').trim();
+      logTerminal('j2', `[session ${admin}] $ ${command}`);
+
+      if (command === 'sudo visudo') {
+        await runCommand('j2', 'runuser', ['-u', admin, '--', 'sudo', '-n', 'visudo', '-c'], { ignoreError:true });
+      } else if (command === 'sudo cat /etc/shadow') {
+        await runCommand('j2', 'runuser', ['-u', admin, '--', 'sudo', '-n', 'cat', '/etc/shadow'], { ignoreError:true });
+      } else if (command.startsWith('ssh ')) {
+        await runCommand('j2', 'bash', ['-lc', `runuser -u ${admin} -- ssh -i /home/${admin}/.ssh/revaut_demo -o BatchMode=yes -o StrictHostKeyChecking=no -p 22 ${admin}@127.0.0.1 true`], { timeout:15000, ignoreError:true });
+      } else {
+        logTerminal('j2', '[sécurité] Commande non autorisée dans la démonstration');
       }
       jsonResponse(res, { ok:true });
     });

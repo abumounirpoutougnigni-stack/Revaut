@@ -1,15 +1,64 @@
 <!doctype html>
-<html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><title>Revaut — Console de démonstration</title><link rel="stylesheet" href="console.css"></head>
-<body><main class="console-shell">
-<header class="topbar"><div><p>PROJET GROUPE 8</p><h1>Centre de démonstration Revaut</h1></div><div class="live"><span></span>VM connectée</div></header>
-<section class="roles">
-<article class="role owner"><div class="role-head"><span>01</span><div><small>PROPRIÉTAIRE</small><h2>Administration</h2></div></div><label>Créer des comptes</label><div class="create-row"><input id="adminNames" value="admin1" placeholder="admin1, admin2, admin3"><button id="createAdmins">Créer</button></div><div id="adminList" class="admin-chips"></div><button class="wide" id="configureDemo">Préparer la VM pour la démonstration</button><button class="wide" id="startAll">Initialiser J2 + J3 + J4</button></article>
-<article class="role admin"><div class="role-head"><span>02</span><div><small>COMPTES ADMINISTRATEURS</small><h2>Sessions de test</h2></div></div><label>Administrateur actif</label><select id="activeAdmin"></select><div class="rule-grid"><button data-rule="heure">Connexion hors heures <b>+20</b></button><button data-rule="sudo">Commande sudo <b>+30</b></button><button data-rule="shadow">Lire /etc/shadow <b>+50</b></button></div><button class="wide danger" id="unlockAdmin">Déverrouiller le compte actif</button></article>
-<article class="role blockchain"><div class="role-head"><span>03</span><div><small>BLOCKCHAIN</small><h2>Preuve locale</h2></div></div><div class="contract-status"><small>CONTRAT</small><strong id="contractAddress">Non configuré</strong></div><div class="contract-status"><small>RÉSULTAT</small><strong id="contractResult">En attente</strong></div><button class="wide" id="deployContract">Démarrer / Déployer</button></article>
-</section>
-<section class="terminal-layout">
-<article class="terminal"><header><span class="dot red"></span><span class="dot amber"></span><span class="dot green"></span><strong>Terminal J2 — Détection</strong><button data-start="j2">Démarrer</button><button data-stop="j2">Stop</button></header><pre id="terminal-j2"></pre></article>
-<article class="terminal"><header><span class="dot red"></span><span class="dot amber"></span><span class="dot green"></span><strong>Terminal J3 — Agent</strong><button data-start="j3">Démarrer</button><button data-stop="j3">Stop</button></header><pre id="terminal-j3"></pre></article>
-<article class="terminal"><header><span class="dot red"></span><span class="dot amber"></span><span class="dot green"></span><strong>Terminal J4 — Blockchain</strong><button id="readStatus">Lire admin1</button></header><pre id="terminal-j4"></pre></article>
-</section>
-</main><script src="console.js"></script></body></html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Revaut — Démonstration interactive</title>
+  <link rel="stylesheet" href="console.css">
+</head>
+<body>
+<main class="demo-shell">
+  <header class="topbar">
+    <div><p>PROJET GROUPE 8</p><h1>Démonstration Revaut</h1></header>
+    <div class="live"><span></span> Machine surveillée</div>
+  </header>
+
+  <section class="owner-grid">
+    <article class="panel owner-panel">
+      <div class="panel-heading"><span class="role-number">1</span><div><small>PROPRIÉTAIRE</small><h2>Créer les administrateurs</h2></div></div>
+      <label>Liste des comptes</label>
+      <div class="input-row"><input id="adminNames" value="admin1, admin2" placeholder="admin1, admin2, admin3"><button id="createAdmins">Créer les comptes</button></div>
+      <div id="adminChips" class="admin-chips"></div>
+      <button id="unlockActive" class="unlock-button">Déverrouiller l'administrateur actif</button>
+      <pre id="ownerOutput" class="owner-output">En attente de création de comptes.</pre>
+    </article>
+
+    <article class="panel blockchain-panel">
+      <div class="panel-heading"><span class="role-number blue">J4</span><div><small>PROPRIÉTAIRE</small><h2>Blockchain locale</h2></div></div>
+      <div class="contract-box"><small>CONTRAT DÉPLOYÉ</small><strong id="contractAddress">Non déployé</strong></div>
+      <div class="contract-actions"><button id="startNode">1. Démarrer Hardhat</button><button id="deployContract">2. Déployer</button><button id="readContract">3. Lire le compte</button></div>
+      <pre id="blockchainOutput" class="small-output">Nœud Hardhat arrêté.</pre>
+    </article>
+  </section>
+
+  <section class="workflow">
+    <article class="panel admin-panel">
+      <div class="panel-heading"><span class="role-number amber">2</span><div><small>ADMINISTRATEUR</small><h2>Terminal de test</h2></div></div>
+      <div class="admin-select-row"><label>Compte actif</label><select id="activeAdmin"></select><span id="accountStatus" class="account-status">Non créé</span></div>
+      <div class="session-user" id="sessionPrompt">admin1@serveur-cible:~$</div>
+      <div class="command-output" id="adminOutput"></div>
+      <div class="command-input"><span>$</span><input id="commandInput" autocomplete="off" placeholder="Tapez une commande : sudo visudo, cat /etc/shadow, ssh ..."><button id="runCommand">Exécuter</button></div>
+      <div class="quick-actions"><button data-command="sudo visudo">sudo visudo <b>+30</b></button><button data-command="sudo cat /etc/shadow">cat /etc/shadow <b>+50</b></button><button data-command="ssh admin1@127.0.0.1">connexion SSH <b>+20</b></button></div>
+    </article>
+
+    <article class="panel pipeline-panel">
+      <div class="pipeline-title"><div><small>CHAÎNE AUTOMATIQUE</small><h2>J2 → J3 → J4</h2></div><span id="pipelineStatus">En attente</span></div>
+      <div class="pipeline">
+        <div class="stage" id="stage-j2"><b>J2</b><strong>Détection</strong><small>Analyse le journal</small></div>
+        <div class="arrow">→</div>
+        <div class="stage" id="stage-j3"><b>J3</b><strong>Agent</strong><small>Cumul des points</small></div>
+        <div class="arrow">→</div>
+        <div class="stage" id="stage-j4"><b>J4</b><strong>Blockchain</strong><small>Statut révoqué</small></div>
+      </div>
+      <div class="metrics-mini"><div><small>POINTS</small><strong id="activeScore">0</strong></div><div><small>STATUT</small><strong id="activeStatus">Actif</strong></div><div><small>ALERTES</small><strong id="activeAlerts">0</strong></div></div>
+    </article>
+  </section>
+
+  <section class="terminal-grid">
+    <article class="terminal"><header><div><i></i><i></i><i></i></div><strong>J2 — Détection réelle</strong><button data-start="j2">Démarrer</button></header><pre id="terminal-j2"></pre></article>
+    <article class="terminal"><header><div><i></i><i></i><i></i></div><strong>J3 — Agent réel</strong><button data-start="j3">Démarrer</button></header><pre id="terminal-j3"></pre></article>
+  </section>
+</main>
+<script src="console.js"></script>
+</body>
+</html>
