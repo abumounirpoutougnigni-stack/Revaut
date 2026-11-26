@@ -42,6 +42,12 @@ async function refreshDashboard(){
 async function refreshLogs(){
   const data=await api('/api/terminals');
   for(const name of ['j2','j3','j4']){
+    const state=document.getElementById(`process-${name}`);
+    if(state){
+      const running=Boolean(data.processes?.[name]);
+      state.textContent=running?'actif':'arrêté';
+      state.className=`process-state ${running?'running':''}`;
+    }
     const element=document.getElementById(`terminal-${name}`);
     if(element){element.textContent=(data.logs[name]||[]).join('\n')||'Aucune sortie.';element.scrollTop=element.scrollHeight}
   }
@@ -69,6 +75,8 @@ document.querySelectorAll('[data-start]').forEach(button=>button.onclick=()=>api
 document.getElementById('startNode').onclick=()=>api('/api/action/j4/node','POST');
 document.getElementById('deployContract').onclick=()=>api('/api/action/j4/deploy','POST');
 document.getElementById('readContract').onclick=()=>api('/api/action/j4/status','POST',{admin:active});
+document.querySelectorAll('[data-stop]').forEach(button=>button.onclick=()=>api(`/api/action/${button.dataset.stop}/stop`,'POST'));
+document.getElementById('stopNode').onclick=()=>api('/api/action/j4/stop','POST');
 
 setInterval(refreshAdmins,3000);setInterval(refreshDashboard,1000);setInterval(refreshLogs,800);
 refreshAdmins();refreshDashboard();refreshLogs();
