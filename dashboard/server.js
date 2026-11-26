@@ -51,7 +51,7 @@ function logTerminal(name, text) {
 function runCommand(name, command, args = [], options = {}) {
   return new Promise(resolve => {
     logTerminal(name, `$ ${command} ${args.join(' ')}`);
-    execFile(command, args, { cwd: options.cwd || projectRoot, timeout: options.timeout || 120000 }, (error, stdout, stderr) => {
+    execFile(command, args, { cwd: options.cwd || projectRoot, env: options.env || process.env, timeout: options.timeout || 120000 }, (error, stdout, stderr) => {
       if (stdout) logTerminal(name, stdout.trim());
       if (stderr) logTerminal(name, stderr.trim());
       if (error && !options.ignoreError) logTerminal(name, `[erreur] ${error.message}`);
@@ -183,9 +183,17 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/action/j4/status') {
-    runCommand('j4', 'npx', ['hardhat', 'run', 'scripts/status-admin.js', '--network', 'localhost'], {
-      cwd:path.join(projectRoot, 'contrat')
-    }).then(() => jsonResponse(res, { ok:true }));
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      let payload = {};
+      try { payload = JSON.parse(body); } catch (_) {}
+      const admin = /^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/.test(payload.admin || '') ? payload.admin : 'admin1';
+      runCommand('j4', 'npx', ['hardhat', 'run', 'scripts/status-admin.js', '--network', 'localhost'], {
+        cwd:path.join(projectRoot, 'contrat'),
+        env:{...process.env, ADMIN:admin}
+      }).then(() => jsonResponse(res, { ok:true }));
+    });
     return;
   }
 
