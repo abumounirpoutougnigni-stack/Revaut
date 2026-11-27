@@ -7,6 +7,17 @@ const crypto = require('crypto');
 const PORT = Number(process.env.PORT || 3000);
 const root = __dirname;
 
+// Chemin absolu vers npx/node pour éviter "Permission denied" quand PATH est restreint
+const NPX = (() => {
+  const candidates = [
+    process.execPath.replace(/\/node$/, '/npx'),   // même dossier que node
+    '/usr/local/bin/npx', '/usr/bin/npx', '/opt/node22/bin/npx'
+  ];
+  for (const c of candidates) { try { require('fs').accessSync(c, require('fs').constants.X_OK); return c; } catch(_) {} }
+  return 'npx'; // fallback
+})();
+const HARDHAT_BIN = path.join(__dirname, '../contrat/node_modules/.bin/hardhat');
+
 function readJsonLines(file) {
   try {
     return fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map(line => {
@@ -173,7 +184,7 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/action/j4/node') {
-    startProcess('j4node', 'npx', ['hardhat', 'node'], path.join(projectRoot, 'contrat'));
+    startProcess('j4node', HARDHAT_BIN, ['node'], path.join(projectRoot, 'contrat'));
     jsonResponse(res, { ok:true });
     return;
   }
@@ -185,7 +196,7 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/action/j4/deploy') {
-    runCommand('j4tx', 'npx', ['hardhat', 'run', 'scripts/deploy.js', '--network', 'localhost'], {
+    runCommand('j4tx', HARDHAT_BIN, ['run', 'scripts/deploy.js', '--network', 'localhost'], {
       cwd: path.join(projectRoot, 'contrat')
     });
     setTimeout(() => jsonResponse(res, { ok:true }), 200);
@@ -199,7 +210,7 @@ const server = http.createServer((req, res) => {
       let payload = {};
       try { payload = JSON.parse(body); } catch (_) {}
       const admin = /^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/.test(payload.admin || '') ? payload.admin : 'admin1';
-      runCommand('j4tx', 'npx', ['hardhat', 'run', 'scripts/status-admin.js', '--network', 'localhost'], {
+      runCommand('j4tx', HARDHAT_BIN, ['run', 'scripts/status-admin.js', '--network', 'localhost'], {
         cwd: path.join(projectRoot, 'contrat'),
         env: { ...process.env, ADMIN: admin }
       });
@@ -263,13 +274,28 @@ const server = http.createServer((req, res) => {
       let payload = {};
       try { payload = JSON.parse(body); } catch (_) {}
       const admin = /^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/.test(payload.admin || '') ? payload.admin : 'admin1';
+      // 1. Déverrouiller le compte Linux
       await runCommand('setup', 'sudo', ['passwd', '-u', admin]);
       await runCommand('setup', 'sudo', ['passwd', '-S', admin]);
-      await runCommand('j4tx', 'npx', ['hardhat', 'run', 'scripts/reintegrer-admin.js', '--network', 'localhost'], {
+      // 2. Vider les alertes et révocations liées à cet admin
+      try {
+        const alertesPath = path.join(projectRoot, 'detection/alertes.jsonl');
+        const revocPath   = path.join(projectRoot, 'agent/revocations.jsonl');
+        const keepAlertes = readJsonLines(alertesPath).filter(l => l.admin !== admin);
+        const keepRevocs  = readJsonLines(revocPath).filter(l => l.admin !== admin);
+        fs.writeFileSync(alertesPath, keepAlertes.map(l => JSON.stringify(l)).join('\n') + (keepAlertes.length ? '\n' : ''));
+        fs.writeFileSync(revocPath,   keepRevocs.map(l => JSON.stringify(l)).join('\n')  + (keepRevocs.length  ? '\n' : ''));
+        logTerminal('setup', `[unlock] alertes et révocations de ${admin} effacées`);
+      } catch(e) { logTerminal('setup', `[unlock] erreur nettoyage JSONL: ${e.message}`); }
+      // 3. Vider les logs terminal de cet admin
+      Object.keys(terminalLogs).forEach(name => terminalLogs[name] = []);
+      // 4. Appeler le contrat pour réintégrer (optionnel, ignore si blockchain non dispo)
+      runCommand('j4tx', HARDHAT_BIN, ['run', 'scripts/reintegrer-admin.js', '--network', 'localhost'], {
         cwd:path.join(projectRoot, 'contrat'), env:{...process.env, ADMIN:admin}
       }).catch(() => {});
+      // 5. Redémarrer J3 proprement
       stopProcess('j3');
-      jsonResponse(res, { ok:true });
+      jsonResponse(res, { ok:true, reset:true });
     });
     return;
   }
@@ -336,7 +362,7 @@ const server = http.createServer((req, res) => {
         logTerminal('j2', JSON.stringify(alerte));
         logTerminal('j2', `[J2→J3] Alerte injectée : ${alerte.regle} +${alerte.points} pts`);
         setTimeout(() => {
-          runCommand('j4tx', 'npx', ['hardhat', 'run', 'scripts/status-admin.js', '--network', 'localhost'], {
+          runCommand('j4tx', HARDHAT_BIN, ['run', 'scripts/status-admin.js', '--network', 'localhost'], {
             cwd:path.join(projectRoot, 'contrat'), env:{...process.env, ADMIN:admin}
           });
         }, 3200);

@@ -69,7 +69,18 @@ document.getElementById('createAdmins').onclick=async()=>{
 };
 
 document.getElementById('activeAdmin').onchange=event=>{active=event.target.value;refreshAdmins();refreshDashboard();};
-document.getElementById('unlockAdmin').onclick=()=>api('/api/admin/unlock','POST',{admin:document.getElementById('activeAdmin').value}).then(()=>{refreshAdmins();refreshDashboard()});
+document.getElementById('unlockAdmin').onclick=async()=>{
+  const admin=document.getElementById('activeAdmin').value;
+  await api('/api/admin/unlock','POST',{admin});
+  // Remettre à zéro l'affichage local
+  document.getElementById('adminOutput').textContent='Prêt. (compte déverrouillé, scores remis à zéro)';
+  document.getElementById('activeScore').textContent='0';
+  document.getElementById('activeAlerts').textContent='0';
+  document.getElementById('activeStatus').textContent='Actif';
+  document.querySelectorAll('.stages div').forEach(n=>n.className='');
+  document.getElementById('pipelineStatus').textContent='En attente';
+  await refreshAdmins();await refreshDashboard();await refreshLogs();
+};
 document.getElementById('commandForm').onsubmit=event=>{event.preventDefault();const input=document.getElementById('commandInput');if(input.value.trim())executeCommand(input.value.trim());input.value=''};
 document.querySelectorAll('[data-command]').forEach(button=>button.onclick=()=>executeCommand(button.dataset.command));
 document.querySelectorAll('[data-start]').forEach(button=>button.onclick=()=>api(`/api/action/${button.dataset.start}/start`,'POST'));
