@@ -107,23 +107,21 @@ function revoquer(admin, totalPts) {
 }
 
 // --- Envoyer une alerte à la blockchain ---
+// Utilise node + chemin absolu vers hardhat/cli pour éviter EACCES sur le symlink .bin/
+const HARDHAT_CLI = path.join(CONTRAT_DIR, "node_modules/hardhat/internal/cli/cli.js");
 function signalerAlerte(admin, points, alerteId) {
   if (!fs.existsSync(SIGNALER_JS)) return;
+  const hardhatBin = fs.existsSync(HARDHAT_CLI) ? HARDHAT_CLI : null;
+  const cmd = hardhatBin
+    ? `"${process.execPath}" "${hardhatBin}" run scripts/signaler.js --network localhost`
+    : `npx hardhat run scripts/signaler.js --network localhost`;
   try {
-    const sortie = execSync(
-      "npx hardhat run scripts/signaler.js --network localhost",
-      {
-        encoding: "utf8",
-        stdio: "pipe",
-        cwd: CONTRAT_DIR,
-        env: {
-          ...process.env,
-          ADMIN: admin,
-          POINTS: String(points),
-          ID: alerteId
-        }
-      }
-    );
+    const sortie = execSync(cmd, {
+      encoding: "utf8",
+      stdio: "pipe",
+      cwd: CONTRAT_DIR,
+      env: { ...process.env, ADMIN: admin, POINTS: String(points), ID: alerteId }
+    });
     console.log(`[agent] Blockchain : ${sortie.trim().split('\n').pop()}`);
   } catch (err) {
     console.warn(`[agent] Blockchain non disponible : ${err.message.split("\n")[0]}`);

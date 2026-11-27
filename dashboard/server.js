@@ -7,16 +7,14 @@ const crypto = require('crypto');
 const PORT = Number(process.env.PORT || 3000);
 const root = __dirname;
 
-// Chemin absolu vers npx/node pour éviter "Permission denied" quand PATH est restreint
-const NPX = (() => {
-  const candidates = [
-    process.execPath.replace(/\/node$/, '/npx'),   // même dossier que node
-    '/usr/local/bin/npx', '/usr/bin/npx', '/opt/node22/bin/npx'
-  ];
-  for (const c of candidates) { try { require('fs').accessSync(c, require('fs').constants.X_OK); return c; } catch(_) {} }
-  return 'npx'; // fallback
-})();
-const HARDHAT_BIN = path.join(__dirname, '../contrat/node_modules/.bin/hardhat');
+// Lancer hardhat via "node hardhat/register" pour éviter EACCES sur le symlink .bin/
+// node lui-même est toujours exécutable car c'est lui qui fait tourner ce serveur
+const NODE_BIN = process.execPath;  // chemin absolu garanti exécutable
+const HARDHAT_SCRIPT = path.join(__dirname, '../contrat/node_modules/hardhat/internal/cli/cli.js');
+// Wrapper : commande = NODE_BIN, args = [HARDHAT_SCRIPT, ...hardhat_args]
+function hardhatCmd(hardhatArgs) {
+  return { cmd: NODE_BIN, args: [HARDHAT_SCRIPT, ...hardhatArgs] };
+}
 
 function readJsonLines(file) {
   try {
@@ -73,13 +71,20 @@ function runCommand(name, command, args = [], options = {}) {
 }
 
 function startProcess(name, command, args, cwd, label) {
-  if (processes[name]) logTerminal(name, '[info] Processus déjà actif');
-  if (processes[name]) return;
+  if (processes[name]) { logTerminal(name, '[info] Processus déjà actif'); return; }
   logTerminal(name, `$ ${label || `${command} ${args.join(' ')}`}`);
-  const child = spawn(command, args, { cwd, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
+  let child;
+  try {
+    child = spawn(command, args, { cwd, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
+  } catch(e) {
+    logTerminal(name, `[erreur spawn] ${e.message}`);
+    return;
+  }
   processes[name] = child;
   child.stdout.on('data', chunk => logTerminal(name, chunk.toString()));
   child.stderr.on('data', chunk => logTerminal(name, chunk.toString()));
+  // IMPORTANT : sans ce handler, une erreur EACCES/ENOENT fait crasher tout le serveur
+  child.on('error', err => { logTerminal(name, `[erreur] ${err.message}`); delete processes[name]; });
   child.on('exit', code => { logTerminal(name, `[processus arrêté, code ${code}]`); delete processes[name]; });
 }
 
@@ -184,7 +189,8 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/action/j4/node') {
-    startProcess('j4node', HARDHAT_BIN, ['node'], path.join(projectRoot, 'contrat'));
+    const h = hardhatCmd(['node']);
+    startProcess('j4node', h.cmd, h.args, path.join(projectRoot, 'contrat'));
     jsonResponse(res, { ok:true });
     return;
   }
@@ -196,9 +202,8 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/action/j4/deploy') {
-    runCommand('j4tx', HARDHAT_BIN, ['run', 'scripts/deploy.js', '--network', 'localhost'], {
-      cwd: path.join(projectRoot, 'contrat')
-    });
+    const h = hardhatCmd(['run', 'scripts/deploy.js', '--network', 'localhost']);
+    runCommand('j4tx', h.cmd, h.args, { cwd: path.join(projectRoot, 'contrat') });
     setTimeout(() => jsonResponse(res, { ok:true }), 200);
     return;
   }
@@ -210,7 +215,8 @@ const server = http.createServer((req, res) => {
       let payload = {};
       try { payload = JSON.parse(body); } catch (_) {}
       const admin = /^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/.test(payload.admin || '') ? payload.admin : 'admin1';
-      runCommand('j4tx', HARDHAT_BIN, ['run', 'scripts/status-admin.js', '--network', 'localhost'], {
+      const h = hardhatCmd(['run', 'scripts/status-admin.js', '--network', 'localhost']);
+      runCommand('j4tx', h.cmd, h.args, {
         cwd: path.join(projectRoot, 'contrat'),
         env: { ...process.env, ADMIN: admin }
       });
@@ -290,7 +296,8 @@ const server = http.createServer((req, res) => {
       // 3. Vider les logs terminal de cet admin
       Object.keys(terminalLogs).forEach(name => terminalLogs[name] = []);
       // 4. Appeler le contrat pour réintégrer (optionnel, ignore si blockchain non dispo)
-      runCommand('j4tx', HARDHAT_BIN, ['run', 'scripts/reintegrer-admin.js', '--network', 'localhost'], {
+      const hr = hardhatCmd(['run', 'scripts/reintegrer-admin.js', '--network', 'localhost']);
+      runCommand('j4tx', hr.cmd, hr.args, {
         cwd:path.join(projectRoot, 'contrat'), env:{...process.env, ADMIN:admin}
       }).catch(() => {});
       // 5. Redémarrer J3 proprement
@@ -362,7 +369,8 @@ const server = http.createServer((req, res) => {
         logTerminal('j2', JSON.stringify(alerte));
         logTerminal('j2', `[J2→J3] Alerte injectée : ${alerte.regle} +${alerte.points} pts`);
         setTimeout(() => {
-          runCommand('j4tx', HARDHAT_BIN, ['run', 'scripts/status-admin.js', '--network', 'localhost'], {
+          const hs = hardhatCmd(['run', 'scripts/status-admin.js', '--network', 'localhost']);
+          runCommand('j4tx', hs.cmd, hs.args, {
             cwd:path.join(projectRoot, 'contrat'), env:{...process.env, ADMIN:admin}
           });
         }, 3200);
