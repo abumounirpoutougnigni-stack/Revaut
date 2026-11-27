@@ -19,22 +19,37 @@ async function refreshAdmins(){
   document.getElementById('accountStatus').className=`status ${locked?'locked':''}`;
 }
 
+let isRevoked=false;
+
 async function refreshDashboard(){
   const data=await api('/api/dashboard');
   const alerts=(data.alertes||[]).filter(item=>item.admin===active);
   const admin=(data.administrateurs||[]).find(item=>item.nom===active);
   const revoked=(data.revocations||[]).some(item=>item.admin===active);
   const score=admin?.score||0;
+  isRevoked=revoked;
+
   document.getElementById('activeScore').textContent=score;
   document.getElementById('activeAlerts').textContent=alerts.length;
   document.getElementById('activeStatus').textContent=revoked?'Révoqué':(score>=50?'Restreint':'Actif');
+
+  // Bloquer/débloquer les boutons de commande selon statut révocation
+  const cmdButtons=[...document.querySelectorAll('[data-command]'),document.getElementById('commandForm').querySelector('button')];
+  const cmdInput=document.getElementById('commandInput');
+  cmdButtons.forEach(b=>{if(b)b.disabled=revoked;});
+  if(cmdInput)cmdInput.disabled=revoked;
+  if(revoked){
+    cmdInput.placeholder='Compte révoqué — cliquer Déverrouiller pour réinitialiser';
+  } else {
+    cmdInput.placeholder='Exemple : sudo visudo';
+  }
 
   document.querySelectorAll('.stages div').forEach(node=>node.classList.remove('active','done'));
   const j2=document.getElementById('stage-j2');
   const j3=document.getElementById('stage-j3');
   const j4=document.getElementById('stage-j4');
   j2.classList.add(alerts.length?'done':'active');
-  j3.classList.add(score>=30?(revoked?'done':'active'):'')
+  j3.classList.add(score>=30?(revoked?'done':'active'):'');
   j4.classList.add(revoked?'done':'');
   document.getElementById('pipelineStatus').textContent=revoked?'Révocation confirmée':(score>0?'Traitement automatique':'En attente');
 }
@@ -54,6 +69,10 @@ async function refreshLogs(){
 }
 
 async function executeCommand(command){
+  if(isRevoked){
+    document.getElementById('adminOutput').textContent+='\n[refusé] Compte révoqué — déverrouiller d\'abord.';
+    return;
+  }
   const admin=document.getElementById('activeAdmin').value;
   if(command.startsWith('ssh ')) command=`ssh ${admin}@127.0.0.1`;
   const output=document.getElementById('adminOutput');

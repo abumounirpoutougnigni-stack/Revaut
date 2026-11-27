@@ -335,6 +335,14 @@ const server = http.createServer((req, res) => {
       try { payload = JSON.parse(body); } catch (_) {}
       const admin = /^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/.test(payload.admin || '') ? payload.admin : 'admin1';
       const command = String(payload.command || '').trim();
+
+      // Bloquer si admin déjà révoqué
+      const revocations = readJsonLines(path.join(projectRoot, 'agent/revocations.jsonl'));
+      if (revocations.some(r => r.admin === admin)) {
+        logTerminal('j2', `[refusé] ${admin} est révoqué — déverrouiller d'abord`);
+        jsonResponse(res, { ok:false, raison:'revoque' });
+        return;
+      }
       logTerminal('j2', `[session ${admin}] $ ${command}`);
 
       let execution = { ok:true };
@@ -368,11 +376,20 @@ const server = http.createServer((req, res) => {
         fs.appendFileSync(path.join(projectRoot, 'detection/alertes.jsonl'), JSON.stringify(alerte) + '\n');
         logTerminal('j2', JSON.stringify(alerte));
         logTerminal('j2', `[J2→J3] Alerte injectée : ${alerte.regle} +${alerte.points} pts`);
+        // Après 4s : lire statut blockchain + vérifier si révocation → arrêter J3
         setTimeout(() => {
           const hs = hardhatCmd(['run', 'scripts/status-admin.js', '--network', 'localhost']);
           runCommand('j4tx', hs.cmd, hs.args, {
             cwd:path.join(projectRoot, 'contrat'), env:{...process.env, ADMIN:admin}
           });
+          // Arrêter J3 si l'admin est révoqué (revocations.jsonl a été écrit par revoquer.sh)
+          setTimeout(() => {
+            const revocs = readJsonLines(path.join(projectRoot, 'agent/revocations.jsonl'));
+            if (revocs.some(r => r.admin === admin) && processes['j3']) {
+              logTerminal('j3', `[dashboard] Admin ${admin} révoqué — arrêt de l'agent J3`);
+              stopProcess('j3');
+            }
+          }, 2000);
         }, 3200);
       }
       jsonResponse(res, { ok:true });
