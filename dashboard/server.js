@@ -39,7 +39,7 @@ const projectRoot = path.join(root, '..');
 const processes = {};
 const monitoredAdmins = new Set(['admin1']);
 const terminalLogs = {
-  setup: [], j2: [], j3: [], j4: [], j5: []
+  setup: [], j2: [], j3: [], j4node: [], j4tx: []
 };
 
 function logTerminal(name, text) {
@@ -173,14 +173,38 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/action/j4/node') {
-    startProcess('j4', 'npx', ['hardhat', 'node'], path.join(projectRoot, 'contrat'));
+    startProcess('j4node', 'npx', ['hardhat', 'node'], path.join(projectRoot, 'contrat'));
     jsonResponse(res, { ok:true });
     return;
   }
 
   if (req.method === 'POST' && url.pathname === '/api/action/j4/stop') {
-    stopProcess('j4');
+    stopProcess('j4node');
     jsonResponse(res, { ok:true });
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/action/j4/deploy') {
+    runCommand('j4tx', 'npx', ['hardhat', 'run', 'scripts/deploy.js', '--network', 'localhost'], {
+      cwd: path.join(projectRoot, 'contrat')
+    });
+    setTimeout(() => jsonResponse(res, { ok:true }), 200);
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/action/j4/status') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      let payload = {};
+      try { payload = JSON.parse(body); } catch (_) {}
+      const admin = /^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/.test(payload.admin || '') ? payload.admin : 'admin1';
+      runCommand('j4tx', 'npx', ['hardhat', 'run', 'scripts/status-admin.js', '--network', 'localhost'], {
+        cwd: path.join(projectRoot, 'contrat'),
+        env: { ...process.env, ADMIN: admin }
+      });
+      setTimeout(() => jsonResponse(res, { ok:true }), 200);
+    });
     return;
   }
 
@@ -241,7 +265,7 @@ const server = http.createServer((req, res) => {
       const admin = /^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/.test(payload.admin || '') ? payload.admin : 'admin1';
       await runCommand('setup', 'sudo', ['passwd', '-u', admin]);
       await runCommand('setup', 'sudo', ['passwd', '-S', admin]);
-      await runCommand('j4', 'npx', ['hardhat', 'run', 'scripts/reintegrer-admin.js', '--network', 'localhost'], {
+      await runCommand('j4tx', 'npx', ['hardhat', 'run', 'scripts/reintegrer-admin.js', '--network', 'localhost'], {
         cwd:path.join(projectRoot, 'contrat'), env:{...process.env, ADMIN:admin}
       }).catch(() => {});
       stopProcess('j3');
@@ -259,11 +283,11 @@ const server = http.createServer((req, res) => {
       const admin = /^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/.test(payload.admin || '') ? payload.admin : 'admin1';
 
       if (payload.rule === 'sudo') {
-        await runCommand('j2', 'runuser', ['-u', admin, '--', 'sudo', '-n', 'visudo', '-c'], { ignoreError:true });
+        await runCommand('j2', 'sudo', ['-n', 'visudo', '-c'], { ignoreError:true });
       } else if (payload.rule === 'shadow') {
-        await runCommand('j2', 'sudo', ['cat', '/etc/shadow'], { ignoreError:true });
+        await runCommand('j2', 'sudo', ['-n', 'cat', '/etc/shadow'], { ignoreError:true });
       } else if (payload.rule === 'heure') {
-        await runCommand('j2', 'bash', ['-lc', `logger -t sshd "Accepted publickey for ${admin} from 127.0.0.1 port 50000 ssh2"`], { ignoreError:true });
+        await runCommand('j2', 'logger', ['-t', 'sshd', `Accepted publickey for ${admin} from 127.0.0.1 port 50000 ssh2`], { ignoreError:true });
       }
       jsonResponse(res, { ok:true });
     });
@@ -282,17 +306,22 @@ const server = http.createServer((req, res) => {
 
       let execution = { ok:true };
 
+      // Simuler la commande dans le terminal J2 (mode démonstration — injection directe)
       if (command === 'sudo visudo') {
-        execution = await runCommand('j2', 'runuser', ['-u', admin, '--', 'sudo', '-n', 'visudo', '-c'], { ignoreError:true });
+        // Tenter la vraie commande mais ne pas bloquer sur son résultat
+        runCommand('j2', 'sudo', ['-n', 'visudo', '-c'], { ignoreError:true });
       } else if (command === 'sudo cat /etc/shadow') {
-        execution = await runCommand('j2', 'runuser', ['-u', admin, '--', 'sudo', '-n', 'cat', '/etc/shadow'], { ignoreError:true });
+        runCommand('j2', 'sudo', ['-n', 'cat', '/etc/shadow'], { ignoreError:true });
       } else if (command.startsWith('ssh ')) {
-        execution = await runCommand('j2', 'bash', ['-lc', `runuser -u ${admin} -- ssh -i /home/${admin}/.ssh/revaut_demo -o BatchMode=yes -o StrictHostKeyChecking=no -p 22 ${admin}@127.0.0.1 true`], { timeout:15000, ignoreError:true });
+        // Simuler une entrée auth.log via logger (fonctionne sans root)
+        runCommand('j2', 'logger', ['-t', 'sshd', `Accepted publickey for ${admin} from 127.0.0.1 port 50000 ssh2`], { ignoreError:true });
       } else {
-        execution = { ok:false };
         logTerminal('j2', '[sécurité] Commande non autorisée dans la démonstration');
+        jsonResponse(res, { ok:true });
+        return;
       }
 
+      // Injection inconditionnelle de l'alerte (mode démo — ne dépend pas du résultat de la commande)
       let alerte = null;
       if (command === 'sudo visudo') {
         alerte = { alerteId:`sudo-demo-${crypto.randomBytes(6).toString('hex')}`, admin, regle:'sudo_inhabituel', points:30, heure:new Date().toISOString() };
@@ -302,12 +331,12 @@ const server = http.createServer((req, res) => {
         alerte = { alerteId:`ssh-demo-${crypto.randomBytes(6).toString('hex')}`, admin, regle:'heure_inhabituelle', points:20, heure:new Date().toISOString() };
       }
 
-      if (alerte && execution.ok) {
+      if (alerte) {
         fs.appendFileSync(path.join(projectRoot, 'detection/alertes.jsonl'), JSON.stringify(alerte) + '\n');
         logTerminal('j2', JSON.stringify(alerte));
-        logTerminal('j2', `[J2] Alerte envoyée à l'agent J3 : ${alerte.points} points`);
+        logTerminal('j2', `[J2→J3] Alerte injectée : ${alerte.regle} +${alerte.points} pts`);
         setTimeout(() => {
-          runCommand('j4', 'npx', ['hardhat', 'run', 'scripts/status-admin.js', '--network', 'localhost'], {
+          runCommand('j4tx', 'npx', ['hardhat', 'run', 'scripts/status-admin.js', '--network', 'localhost'], {
             cwd:path.join(projectRoot, 'contrat'), env:{...process.env, ADMIN:admin}
           });
         }, 3200);
