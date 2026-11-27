@@ -41,11 +41,11 @@ async function refreshDashboard(){
 
 async function refreshLogs(){
   const data=await api('/api/terminals');
-  for(const name of ['j2','j3','j4']){
+  for(const name of ['j2','j3','j4node','j4tx']){
     const state=document.getElementById(`process-${name}`);
     if(state){
       const running=Boolean(data.processes?.[name]);
-      state.textContent=running?'actif':'arrêté';
+      state.textContent=running?'actif':(name==='j4tx'?'inactif':'arrêté');
       state.className=`process-state ${running?'running':''}`;
     }
     const element=document.getElementById(`terminal-${name}`);
